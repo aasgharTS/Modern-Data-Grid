@@ -169,80 +169,110 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
       mapRecordsToState(force = false) {
         const { context } = this.props;
         const dataSet = context.parameters.DataSource as ComponentFramework.PropertyTypes.DataSet;
-        console.log("map to state");
-
+      console.log("map to state")
         // Parse field configurations
         let fieldConfig: Record<string, any> = {};
         try {
-            const rawConfig = context.parameters.FieldConfigurations?.raw || "{}";
-            fieldConfig = this.parseConfigurations(rawConfig);
+          const rawConfig = context.parameters.FieldConfigurations?.raw || "{}";
+          fieldConfig = this.parseConfigurations(rawConfig);
         } catch (error) {
-            console.error("Invalid JSON in FieldConfigurations:", context.parameters.FieldConfigurations?.raw, error);
+          console.error("Invalid JSON in FieldConfigurations:", context.parameters.FieldConfigurations?.raw, error);
         }
 
         const typeHandlers: Record<string, (value: any, config: any, context: ComponentFramework.Context<IInputs>) => any> = {
-            Currency: (value, config) => this.formatCurrency(value, config?.currency || "USD"),
+            "Currency": (value, config) => this.formatCurrency(value, config?.currency || "USD"),
             "DateAndTime.DateAndTime": (value, config, context) =>
-                formatDate(new Date(value), config?.dateFormat || "yyyy-MM-dd HH:mm:ss", context),
+              formatDate(new Date(value), config?.dateFormat || "yyyy-MM-dd HH:mm:ss", context),
             "DateAndTime.DateOnly": (value, config, context) =>
-                formatDate(new Date(value), config?.dateFormat || "yyyy-MM-dd", context),
-            Decimal: (value, config) => this.formatDecimal(value, parseInt(config?.decimalPlaces) || 2),
-            TwoOptions: (value, config) => (value ? config?.trueLabel || "Yes" : config?.falseLabel || "No"),
+              formatDate(new Date(value), config?.dateFormat || "yyyy-MM-dd", context),
+            "Decimal": (value, config) => this.formatDecimal(value, parseInt(config?.decimalPlaces) || 2),
+            "TwoOptions": (value, config) => (value ? config?.trueLabel || "Yes" : config?.falseLabel || "No"),
             "SingleLine.Email": (value) => `mailto:${value}`,
             "SingleLine.Phone": (value) => `tel:${value}`,
             "SingleLine.URL": (value) => `<a href="${value}">${value}</a>`,
-            Object: (value) => JSON.stringify(value),
-        };
+            "Object": (value) => JSON.stringify(value),
+            // Add more as needed
+          };
 
+        //const dateFormat = context.parameters.DateFormat?.raw || availablePatterns[0] || "yyyy-MM-dd";
+        //const fieldConfigs = JSON.parse(context.parameters.FieldConfigurations?.raw || "{}");
+        //console.log('Starting mapRecordsToState...');
         if (!dataSet) {
-            console.log("DataSet is undefined.");
+            //console.log('DataSet is undefined.');
+            return;
+        }
+
+        if (dataSet.paging.totalResultCount === -1) {
+            console.log("unable to retrieve records, because paging.totalResultCount is -1")
+        }
+
+        if (dataSet.loading && !force) {
+            //console.log('DataSet is still loading.');
             return;
         }
 
         if (!dataSet.sortedRecordIds.length) {
-            console.log("No sorted record IDs found.");
+            //console.log('No sorted record IDs found.');
+            // Trigger data fetch or reload
             if (dataSet.paging && dataSet.paging.loadNextPage) {
-                console.log("Attempting to load next page...");
+                //console.log('Attempting to load next page...');
                 dataSet.paging.loadNextPage();
             }
-            this.setState({ records: [], needsRefresh: true });
             return;
         }
 
         const records = dataSet.sortedRecordIds.map((recordId) => {
             const record = dataSet.records[recordId];
             if (!record) {
-                console.log(`Record ID ${recordId} not found in dataSet.records.`);
+                //console.log(`Record ID ${recordId} not found in dataSet.records.`);
                 return null;
             }
-            console.log("Processed record:", record);
+            console.log("preproceed record", record)
             const processedRecord = {
                 id: recordId,
                 ...dataSet.columns.reduce((rec: Record<string, any>, col) => {
                     const value = record.getValue(col.alias);
                     const colType = col.dataType;
+                    //Decimal SingleLine.Text
                     try {
+                        // Use the typeHandlers map to process the column type
                         rec[col.name] = typeHandlers[colType]
-                            ? typeHandlers[colType](value, fieldConfig, context)
-                            : value;
-                        console.log("Type handler:", typeHandlers[colType]);
-                    } catch (error) {
+                          ? typeHandlers[colType](value, fieldConfig, context)
+                          : value; // Default case for unsupported data types
+                          console.log("Type handler",typeHandlers[colType])
+                      } catch (error) {
                         console.error(`Error processing column "${col.name}" of type "${colType}":`, error);
-                        rec[col.name] = value;
-                    }
-                    return rec;
+                        rec[col.name] = value; // Fallback to raw value
+                      }
+                      return rec;
                 }, {}),
             };
+
+            console.log('Processed record:', processedRecord);
             return processedRecord;
         }).filter(Boolean);
 
-        // Always update state to ensure new records are reflected
-        this.setState({
-            records,
-            columns: dataSet.columns,
-            needsRefresh: false,
+        //console.log('Final mapped records:', records);
+        //console.log('Columns:', dataSet.columns);
+
+        this.setState(prevState => {
+            const isRecordsChanged = !isEqual(prevState.records, records);
+            const isColumnsChanged = !isEqual(prevState.columns, dataSet.columns);
+
+            if (isRecordsChanged || isColumnsChanged) {
+                //console.log('Updating state with new records and columns.');
+                return {
+                    records,
+                    columns: dataSet.columns,
+                    needsRefresh: false
+                };
+            }
+
+            //console.log('No changes detected in records or columns. Skipping state update.');
+            return null;
         });
     }
+
 
     updateFilters(columns: ComponentFramework.PropertyHelper.DataSetApi.Column[], previousFilters: any) {
         return columns.reduce((acc: any, col: any) => {
@@ -461,7 +491,7 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
         return [];
     }
 
-    forceRefreshDataset = async () => {
+   forceRefreshDataset = async () => {
         const { context } = this.props;
         const dataSet = context.parameters.DataSource;
 
