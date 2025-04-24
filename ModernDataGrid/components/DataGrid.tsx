@@ -169,110 +169,80 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
       mapRecordsToState(force = false) {
         const { context } = this.props;
         const dataSet = context.parameters.DataSource as ComponentFramework.PropertyTypes.DataSet;
-      console.log("map to state")
+        console.log("map to state");
+
         // Parse field configurations
         let fieldConfig: Record<string, any> = {};
         try {
-          const rawConfig = context.parameters.FieldConfigurations?.raw || "{}";
-          fieldConfig = this.parseConfigurations(rawConfig);
+            const rawConfig = context.parameters.FieldConfigurations?.raw || "{}";
+            fieldConfig = this.parseConfigurations(rawConfig);
         } catch (error) {
-          console.error("Invalid JSON in FieldConfigurations:", context.parameters.FieldConfigurations?.raw, error);
+            console.error("Invalid JSON in FieldConfigurations:", context.parameters.FieldConfigurations?.raw, error);
         }
 
         const typeHandlers: Record<string, (value: any, config: any, context: ComponentFramework.Context<IInputs>) => any> = {
-            "Currency": (value, config) => this.formatCurrency(value, config?.currency || "USD"),
+            Currency: (value, config) => this.formatCurrency(value, config?.currency || "USD"),
             "DateAndTime.DateAndTime": (value, config, context) =>
-              formatDate(new Date(value), config?.dateFormat || "yyyy-MM-dd HH:mm:ss", context),
+                formatDate(new Date(value), config?.dateFormat || "yyyy-MM-dd HH:mm:ss", context),
             "DateAndTime.DateOnly": (value, config, context) =>
-              formatDate(new Date(value), config?.dateFormat || "yyyy-MM-dd", context),
-            "Decimal": (value, config) => this.formatDecimal(value, parseInt(config?.decimalPlaces) || 2),
-            "TwoOptions": (value, config) => (value ? config?.trueLabel || "Yes" : config?.falseLabel || "No"),
+                formatDate(new Date(value), config?.dateFormat || "yyyy-MM-dd", context),
+            Decimal: (value, config) => this.formatDecimal(value, parseInt(config?.decimalPlaces) || 2),
+            TwoOptions: (value, config) => (value ? config?.trueLabel || "Yes" : config?.falseLabel || "No"),
             "SingleLine.Email": (value) => `mailto:${value}`,
             "SingleLine.Phone": (value) => `tel:${value}`,
             "SingleLine.URL": (value) => `<a href="${value}">${value}</a>`,
-            "Object": (value) => JSON.stringify(value),
-            // Add more as needed
-          };
+            Object: (value) => JSON.stringify(value),
+        };
 
-        //const dateFormat = context.parameters.DateFormat?.raw || availablePatterns[0] || "yyyy-MM-dd";
-        //const fieldConfigs = JSON.parse(context.parameters.FieldConfigurations?.raw || "{}");
-        //console.log('Starting mapRecordsToState...');
         if (!dataSet) {
-            //console.log('DataSet is undefined.');
-            return;
-        }
-
-        if (dataSet.paging.totalResultCount === -1) {
-            console.log("unable to retrieve records, because paging.totalResultCount is -1")
-        }
-
-        if (dataSet.loading && !force) {
-            //console.log('DataSet is still loading.');
+            console.log("DataSet is undefined.");
             return;
         }
 
         if (!dataSet.sortedRecordIds.length) {
-            //console.log('No sorted record IDs found.');
-            // Trigger data fetch or reload
+            console.log("No sorted record IDs found.");
             if (dataSet.paging && dataSet.paging.loadNextPage) {
-                //console.log('Attempting to load next page...');
+                console.log("Attempting to load next page...");
                 dataSet.paging.loadNextPage();
             }
+            this.setState({ records: [], needsRefresh: true });
             return;
         }
 
         const records = dataSet.sortedRecordIds.map((recordId) => {
             const record = dataSet.records[recordId];
             if (!record) {
-                //console.log(`Record ID ${recordId} not found in dataSet.records.`);
+                console.log(`Record ID ${recordId} not found in dataSet.records.`);
                 return null;
             }
-            console.log("preproceed record", record)
+            console.log("Processed record:", record);
             const processedRecord = {
                 id: recordId,
                 ...dataSet.columns.reduce((rec: Record<string, any>, col) => {
                     const value = record.getValue(col.alias);
                     const colType = col.dataType;
-                    //Decimal SingleLine.Text
                     try {
-                        // Use the typeHandlers map to process the column type
                         rec[col.name] = typeHandlers[colType]
-                          ? typeHandlers[colType](value, fieldConfig, context)
-                          : value; // Default case for unsupported data types
-                          console.log("Type handler",typeHandlers[colType])
-                      } catch (error) {
+                            ? typeHandlers[colType](value, fieldConfig, context)
+                            : value;
+                        console.log("Type handler:", typeHandlers[colType]);
+                    } catch (error) {
                         console.error(`Error processing column "${col.name}" of type "${colType}":`, error);
-                        rec[col.name] = value; // Fallback to raw value
-                      }
-                      return rec;
+                        rec[col.name] = value;
+                    }
+                    return rec;
                 }, {}),
             };
-
-            console.log('Processed record:', processedRecord);
             return processedRecord;
         }).filter(Boolean);
 
-        //console.log('Final mapped records:', records);
-        //console.log('Columns:', dataSet.columns);
-
-        this.setState(prevState => {
-            const isRecordsChanged = !isEqual(prevState.records, records);
-            const isColumnsChanged = !isEqual(prevState.columns, dataSet.columns);
-
-            if (isRecordsChanged || isColumnsChanged) {
-                //console.log('Updating state with new records and columns.');
-                return {
-                    records,
-                    columns: dataSet.columns,
-                    needsRefresh: false
-                };
-            }
-
-            //console.log('No changes detected in records or columns. Skipping state update.');
-            return null;
+        // Always update state to ensure new records are reflected
+        this.setState({
+            records,
+            columns: dataSet.columns,
+            needsRefresh: false,
         });
     }
-
 
     updateFilters(columns: ComponentFramework.PropertyHelper.DataSetApi.Column[], previousFilters: any) {
         return columns.reduce((acc: any, col: any) => {
@@ -425,11 +395,15 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
         if (!gridIsEnabled) {
             return;
         }
-        const newSelectedRecordIds = e.value.map((record: any) => record.id);
-        this.props.context.parameters.DataSource.setSelectedRecordIds(newSelectedRecordIds)
+    
+        // Handle single or multiple selection
+        const newSelectedRecords = Array.isArray(e.value) ? e.value : e.value ? [e.value] : [];
+        const newSelectedRecordIds = newSelectedRecords.map((record: any) => record.id);
+    
+        this.props.context.parameters.DataSource.setSelectedRecordIds(newSelectedRecordIds);
         this.setState({
             selectedRecordIds: newSelectedRecordIds,
-            selectedRecords: e.value,
+            selectedRecords: newSelectedRecords,
         }, () => {
             this.forceUpdate();
         });
@@ -487,12 +461,27 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
         return [];
     }
 
-    forceRefreshDataset = () => {
-        setTimeout(() => {
-            this.props.notifyOutputChanged();
-            this.mapRecordsToState(true);
-            this.forceUpdate();
-        }, 300);
+    forceRefreshDataset = async () => {
+        const { context } = this.props;
+        const dataSet = context.parameters.DataSource;
+
+        // Trigger dataset refresh
+        dataSet.refresh();
+        this.props.notifyOutputChanged();
+
+        // Wait for the dataset to finish loading
+        const waitForData = async (timeoutMs = 5000): Promise<void> => {
+            const start = Date.now();
+            while (dataSet.loading && Date.now() - start < timeoutMs) {
+                await new Promise(resolve => setTimeout(resolve, 100)); // Poll every 100ms
+            }
+            if (dataSet.loading) {
+                console.warn("Dataset loading timed out");
+            }
+        };
+
+        await waitForData();
+        this.mapRecordsToState(true); // Force mapping even if loading
     };
 
     render() {
@@ -508,47 +497,33 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
             ? (context.parameters.SelectionMode?.raw as "multiple" | "checkbox")
             : "multiple";
         const allowSorting = context.parameters.AllowSorting?.raw ?? false;
+        const allowMulti = context.parameters.AllowMultipleSelection?.raw ?? false;
         const allowFiltering = context.parameters.AllowFiltering?.raw ?? false;
         const rowsPerPageOptions = [5, 15, 25];
-
+    
         const onRenderItemColumn = (
             item?: Record<string, any>,
             index?: number,
             column?: IColumn,
         ) => {
-            //console.log("Rendering item column:");
-            //console.log("Item:", item);
-            //console.log("Index:", item?.id);
-            //console.log("Column:", column);
-
             if (column && column.fieldName && item) {
                 const value = item[column.fieldName];
-                //console.log(`Value for field '${column.fieldName}':`, value);
-
-                if (value && typeof value === 'object' && value.toString) {
-                    //console.log("Value is an object, using toString():", value.toString());
+                if (value && typeof value === "object" && value.toString) {
                     return value.toString();
                 }
-
-                if (value == null) {
-                    //console.log(`Value for field '${column.fieldName}' is null or undefined.`);
-                }
-
-                return value ?? '';
+                return value ?? "";
             }
-
-            //console.log("Returning null for the column render.");
             return null;
         };
-
+    
         type IColumn = {
             fieldName: string;
         };
-
-
+    
         return (
-            <div className="card" style={{ display: 'flex', width: '100%', height: '100%', overflow: 'auto' }}>
+            <div className="card" style={{ display: "flex", width: "100%", height: "100%", overflow: "auto" }}>
                 <DataTable
+                    lazy
                     value={records}
                     paginator={displayPagination}
                     header={header}
@@ -556,73 +531,38 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
                     paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
                     rowsPerPageOptions={rowsPerPageOptions}
                     first={(this.state.currentPage - 1) * paging.pageSize}
-                    totalRecords={paging.totalResultCount}
-                    /*
-                totalResultCount: number;
-                firstPageNumber: number;
-                lastPageNumber: number;
-                pageSize: number;
-                hasNextPage: boolean;
-                hasPreviousPage: boolean;
-                loadNextPage(loadOnlyNewPage?: boolean): void;
-                loadPreviousPage(loadOnlyNewPage?: boolean): void;
-                reset(): void;
-                setPageSize(pageSize: number): void;
-                loadExactPage(pageNumber: number): void;
-            }
-                    
-                    */
-
-                    onPage={(e: any) => {
-                        //console.log('onPage event triggered');
+                    totalRecords={paging.totalResultCount >= 0 ? paging.totalResultCount : 0}
+                    onPage={(e: DataTableStateEvent) => {
                         const { page, rows } = e;
-
-                        if (paging) {
-                            const totalPages = Math.ceil(paging.totalResultCount / rows);
-                            //console.log('Paging Object:', paging);
-                            const targetPage = page + 1;
-                            //console.log('Current Target Page:', targetPage);
-                            //console.log('Rows Per Page:', rows);
-
-                            // Handle change in rows per page
-                            if (rows !== paging.pageSize) {
-                                //console.log('Changing rows per page to:', rows);
-                                paging.setPageSize(rows);
-                                paging.reset();
-                                this.setState({ currentPage: 1 }, () => {
-                                    this.forceRefreshDataset();
-                                });
-                            }
-                            // Navigate to next page
-                            else if (targetPage > this.state.currentPage && targetPage <= totalPages) {
-                                //console.log('Navigating to next page');
-                                paging.loadNextPage();
-                                this.setState({ currentPage: targetPage });
+                        const paging = this.props.context.parameters.DataSource.paging;
+                        if (!paging) {
+                            console.log("Paging is undefined");
+                            return;
+                        }
+    
+                        if (page === undefined) {
+                            console.warn("Page is undefined in onPage event. Defaulting to page 1.");
+                            return;
+                        }
+    
+                        const totalPages = Math.ceil(paging.totalResultCount / rows);
+                        const targetPage = page + 1;
+    
+                        if (rows !== paging.pageSize) {
+                            console.log("Changing rows per page to:", rows);
+                            paging.setPageSize(rows);
+                            paging.reset();
+                            this.setState({ currentPage: 1 }, () => {
                                 this.forceRefreshDataset();
-                            }
-                            // Navigate to previous page
-                            else if (targetPage < this.state.currentPage && targetPage >= 0) {
-                                //console.log('Navigating to previous page');
-                                paging.loadPreviousPage();
-                                this.setState({ currentPage: targetPage }, () => {
-                                    this.forceRefreshDataset();
-                                });
-                            }
-                            // Navigate to an exact page
-                            else if (targetPage !== this.state.currentPage) {
-                                //console.log('Loading exact page:', targetPage);
-                                paging.loadExactPage(targetPage + 1);
-                                this.setState({ currentPage: targetPage }, () => {
-                                    this.forceRefreshDataset();
-                                });
-                            } else {
-                                //console.log('No action taken for paging');
-                            }
-
-                            // Ensure UI reflects changes
-                            this.forceUpdate();
+                            });
+                        } else if (targetPage !== this.state.currentPage && targetPage >= 1 && targetPage <= totalPages) {
+                            console.log("Navigating to page:", targetPage);
+                            paging.loadExactPage(targetPage);
+                            this.setState({ currentPage: targetPage }, () => {
+                                this.forceRefreshDataset();
+                            });
                         } else {
-                            //console.log('Paging is undefined');
+                            console.log("No action taken for paging");
                         }
                     }}
                     dataKey="id"
@@ -633,13 +573,12 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
                     filterDisplay={filterDisplayType as "menu" | "row"}
                     globalFilterFields={context.parameters.DataSource.columns.map(col => col.name)}
                     emptyMessage={emptyMessage}
-                    currentPageReportTemplate={`Showing {first} to {last} of ${paging.totalResultCount} entries`}
+                    currentPageReportTemplate={`Showing {first} to {last} of ${paging.totalResultCount >= 0 ? paging.totalResultCount : 0} entries`}
                     scrollable
                     scrollHeight="flex"
-                    style={{ width: '100%', minWidth: '0' }}
-
+                    style={{ width: "100%", minWidth: "0" }}
                 >
-                    <Column selectionMode="multiple" headerStyle={{ width: '3rem' }}></Column>
+                    <Column selectionMode={allowMulti ? "multiple" : "single"} headerStyle={{ width: "3rem" }}></Column>
                     {context.parameters.DataSource.columns.map((col, index) => (
                         <Column
                             key={index}
@@ -649,7 +588,7 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
                             filter={allowFiltering}
                             filterPlaceholder={`Search by ${col.displayName}`}
                             showFilterMatchModes
-                            style={{ minWidth: '12rem' }}
+                            style={{ minWidth: "12rem" }}
                             body={(item) => onRenderItemColumn(item, undefined, { fieldName: col.name } as IColumn)}
                         />
                     ))}

@@ -19,5 +19,6 @@
     <property name="AllowFiltering" display-name-key="Allow Filtering" description-key="Enables or disables filtering on columns" of-type="TwoOptions" usage="bound" />
     <property name="IsEnabled" display-name-key="Enable" description-key="Enables or disables the Data Grid" of-type="TwoOptions" usage="bound" default-value="true" />
     <property name="FieldConfigurations" display-name-key="Field Configurations" description-key="Allows custom configurations to be set on column values" of-type="SingleLine.TextArea" usage="bound" default-value="CurrencyField=currency:GBP, DateField=dateFormat:yyyy-MM-dd, DecimalField=decimalPlaces:2, BooleanField=trueLabel:Yes|falseLabel:No" />
+    <property name="AllowMultipleSelection" display-name-key="Allow Multiple Selection" description-key="When True allow multiple select in data grid" of-type="TwoOptions" usage="bound" default-value="false" />
   </control>
 </manifest>
