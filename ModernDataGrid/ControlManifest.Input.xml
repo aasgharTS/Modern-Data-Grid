@@ -11,7 +11,7 @@
     </resources>
     <property name="DisplayHeader" display-name-key="Display Header" description-key="Whether to display the header of the data grid" of-type="TwoOptions" usage="bound" default-value="true" />
     <property name="HeaderText" display-name-key="Header Text" description-key="The text displayed as the header of the data grid" of-type="SingleLine.Text" usage="bound" />
-    <property name="DisplaySearch" display-name-key="Display Search" description-key="Enables or disables the display of a search input" of-type="TwoOptions" usage="bound" />
+    <!-- <property name="DisplaySearch" display-name-key="Display Search" description-key="Enables or disables the display of a search input" of-type="TwoOptions" usage="bound" /> -->
     <property name="DisplayPagination" display-name-key="Display Pagination" description-key="Enables or disables pagination controls" of-type="TwoOptions" usage="bound" default-value="false" />
     <property name="EmptyMessage" display-name-key="Empty Message" description-key="The message shown when no records are available" of-type="SingleLine.Text" usage="bound" default-value="No records found" />
     <property name="SelectionMode" display-name-key="Selection Mode" description-key="Specifies the selection mode (e.g., single or multiple)" of-type="SingleLine.Text" usage="bound" default-value="multiple" />

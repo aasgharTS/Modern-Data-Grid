@@ -226,8 +226,8 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
                         rec[col.name] = typeHandlers[colType]
                             ? typeHandlers[colType](value, fieldConfig, context)
                             : typeof value === 'object' && value !== null
-                            ? JSON.stringify(value)
-                            : value ?? '';
+                                ? JSON.stringify(value)
+                                : value ?? '';
                     } catch (error) {
                         console.error(`Error processing column "${col.name}" of type "${colType}":`, error);
                         rec[col.name] = value ?? '';
@@ -372,7 +372,7 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
 
     renderHeader() {
         const displayHeader = this.props.context.parameters.DisplayHeader?.raw ?? false;
-        const displaySearch = this.props.context.parameters.DisplaySearch?.raw ?? false;
+        // const displaySearch = this.props.context.parameters.DisplaySearch?.raw ?? false;
         const headerText = this.props.context.parameters.HeaderText?.raw ?? this.props.context.parameters.DataSource.getTargetEntityType();
 
         if (!displayHeader) {
@@ -382,18 +382,9 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
         return (
             <div className="flex flex-wrap gap-2 justify-content-between align-items-center">
                 <h4 className="m-0">{headerText}</h4>
-                {displaySearch && (
-                    <IconField iconPosition="left">
-                        <InputIcon className="pi pi-search" />
-                        <InputText
-                            value={this.state.globalFilterValue}
-                            onChange={this.onGlobalFilterChange}
-                            placeholder="Keyword Search"
-                        />
-                    </IconField>
-                )}
             </div>
         );
+        
     }
 
     forceRefreshDataset = async () => {
@@ -426,13 +417,16 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
         const allowSorting = context.parameters.AllowSorting?.raw ?? false;
         const allowMulti = context.parameters.AllowMultipleSelection?.raw ?? false;
         const allowFiltering = context.parameters.AllowFiltering?.raw ?? false;
-    
+        const rowsPerPageOptions = [5, 15, 25];
+
         return (
             <div className="card" style={{ display: 'flex', width: '100%', height: '100%', overflow: 'auto' }}>
                 <DataTable
                     value={records}
                     paginator={displayPagination}
                     rows={10}
+                    paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+                    rowsPerPageOptions={rowsPerPageOptions}
                     dataKey="id"
                     filterDisplay={allowFiltering ? 'row' : undefined}
                     globalFilterFields={context.parameters.DataSource.columns.map((col) => col.name)}
@@ -445,6 +439,8 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
                     selection={allowMulti ? selectedRecordIds : selectedRecordIds[0] || null} // Handle single/multiple selection
                     onSelectionChange={this.onSelectionChange}
                 >
+                    <Column selectionMode={allowMulti ? "multiple" : "single"} headerStyle={{ width: "3rem" }}></Column>
+
                     {context.parameters.DataSource.columns.map((col, index) => (
                         <Column
                             key={index}
