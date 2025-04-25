@@ -418,7 +418,10 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
         const allowMulti = context.parameters.AllowMultipleSelection?.raw ?? false;
         const allowFiltering = context.parameters.AllowFiltering?.raw ?? false;
         const rowsPerPageOptions = [5, 15, 25];
-
+        const allowedSelectionModes: Array<"multiple" | "checkbox"> = ["multiple", "checkbox"];
+        const selectionMode = (context.parameters.SelectionMode?.raw && allowedSelectionModes.includes(context.parameters.SelectionMode?.raw as any))
+            ? (context.parameters.SelectionMode?.raw as "multiple" | "checkbox")
+            : "multiple";
         return (
             <div className="card" style={{ display: 'flex', width: '100%', height: '100%', overflow: 'auto' }}>
                 <DataTable
@@ -434,9 +437,8 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
                     header={header}
                     emptyMessage={emptyMessage}
                     style={{ width: '100%', minWidth: '0' }}
-                    sortMode={allowSorting ? 'multiple' : undefined}
-                    selectionMode={allowMulti ? 'checkbox' : null} // Use 'checkbox' for multiple, null for single
-                    selection={allowMulti ? selectedRecordIds : selectedRecordIds[0] || null} // Handle single/multiple selection
+                    selectionMode={selectionMode}
+                    selection={records.filter(record => selectedRecordIds.includes(record.id))}
                     onSelectionChange={this.onSelectionChange}
                 >
                     <Column selectionMode={allowMulti ? "multiple" : "single"} headerStyle={{ width: "3rem" }}></Column>
