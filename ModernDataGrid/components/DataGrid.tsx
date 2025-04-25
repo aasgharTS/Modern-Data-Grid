@@ -32,6 +32,8 @@ interface DataGridState {
     isFilter?: boolean;
     currentPage: number;
     totalPages: number;
+    records2: any[];
+    filters2: any;
 }
 
 class DataGrid extends Component<DataGridProps, DataGridState> {
@@ -61,10 +63,24 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
             needsRefresh: false,
             currentPage: 1,
             isFilter: false,
+            records2: this.generateDummyData(),
+            filters2: {},
 
         };
     }
-
+    generateDummyData() {
+        const dummy: any[] = [];
+        for (let i = 1; i <= 20; i++) {
+            dummy.push({
+                id: i,
+                name: `User ${i}`,
+                email: `user${i}@example.com`,
+                country: `Country ${i % 5 + 1}`,
+                status: i % 2 === 0 ? "Active" : "Inactive"
+            });
+        }
+        return dummy;
+    }
     componentDidMount() {
         (window as any).context = this.props.context;
         console.log(this.props.context)
@@ -609,7 +625,12 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
         const allowMulti = context.parameters.AllowMultipleSelection?.raw ?? false;
         const allowFiltering = context.parameters.AllowFiltering?.raw ?? false;
         const rowsPerPageOptions = [5, 15, 25];
-
+        const columns2 = [
+            { name: "name", displayName: "Name" },
+            { name: "email", displayName: "Email" },
+            { name: "country", displayName: "Country" },
+            { name: "status", displayName: "Status" }
+        ];
         const onRenderItemColumn = (
             item?: Record<string, any>,
             index?: number,
@@ -631,86 +652,28 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
 
         return (
             <div className="card" style={{ display: "flex", width: "100%", height: "100%", overflow: "auto" }}>
-                <DataTable
-                    lazy
-                    value={this.state.records}
-                    paginator={displayPagination}
-                    header={header}
-                    rows={paging.pageSize}
-                    paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
-                    rowsPerPageOptions={rowsPerPageOptions}
-                    first={(this.state.currentPage - 1) * paging.pageSize}
-                    totalRecords={paging.totalResultCount >= 0 ? paging.totalResultCount : 0}
-                    onPage={(e: DataTableStateEvent) => {
-                        const { page, rows } = e;
-                        const paging = this.props.context.parameters.DataSource.paging;
-                        if (!paging) {
-                            console.log("Paging is undefined");
-                            return;
-                        }
-
-                        if (paging) {
-                            this.setState(
-                                {
-                                    isFilter: false,
-                                }
-                            )
-                        }
-
-                        if (page === undefined) {
-                            console.warn("Page is undefined in onPage event. Defaulting to page 1.");
-                            return;
-                        }
-
-                        const totalPages = Math.ceil(paging.totalResultCount / rows);
-                        const targetPage = page + 1;
-
-                        if (rows !== paging.pageSize) {
-                            console.log("Changing rows per page to:", rows);
-                            paging.setPageSize(rows);
-                            paging.reset();
-                            this.setState({ currentPage: 1 }, () => {
-                                this.forceRefreshDataset();
-                            });
-                        } else if (targetPage !== this.state.currentPage && targetPage >= 1 && targetPage <= totalPages) {
-                            console.log("Navigating to page:", targetPage);
-                            paging.loadExactPage(targetPage);
-                            this.setState({ currentPage: targetPage }, () => {
-                                this.forceRefreshDataset();
-                            });
-                        } else {
-                            console.log("No action taken for paging");
-                        }
-                    }}
-                    dataKey="id"
-                    selectionMode={selectionMode}
-                    selection={records.filter(record => selectedRecordIds.includes(record.id))}
-                    onSelectionChange={this.onSelectionChange}
-                    filters={filters}
-                    filterDisplay={filterDisplayType as "menu" | "row"}
-                    globalFilterFields={context.parameters.DataSource.columns.map(col => col.name)}
-                    emptyMessage={emptyMessage}
-                    currentPageReportTemplate={`Showing {first} to {last} of ${paging.totalResultCount >= 0 ? paging.totalResultCount : 0} entries`}
-                    scrollable
-                    scrollHeight="flex"
-                    style={{ width: "100%", minWidth: "0" }}
-                    onFilter={this.onFilter}
-                >
-                    <Column selectionMode={allowMulti ? "multiple" : "single"} headerStyle={{ width: "3rem" }}></Column>
-                    {context.parameters.DataSource.columns.map((col, index) => (
-                        <Column
-                            key={index}
-                            field={col.name}
-                            header={col.displayName}
-                            sortable={allowSorting}
-                            filter={allowFiltering}
-                            filterPlaceholder={`Search by ${col.displayName}`}
-                            showFilterMatchModes
-                            style={{ minWidth: "12rem" }}
-                            body={(item) => onRenderItemColumn(item, undefined, { fieldName: col.name } as IColumn)}
-                        />
-                    ))}
-                </DataTable>
+                 <DataTable
+                value={this.state.records2}
+                paginator
+                rows={10}
+                dataKey="id"
+                filterDisplay="row"
+                globalFilterFields={columns2.map(col => col.name)}
+                header={<h3 className="m-0">User List</h3>}
+                emptyMessage="No data found."
+                style={{ width: "100%", minWidth: "0" }}
+            >
+                {columns2.map((col, index) => (
+                    <Column
+                        key={index}
+                        field={col.name}
+                        header={col.displayName}
+                        filter
+                        filterPlaceholder={`Search by ${col.displayName}`}
+                        style={{ minWidth: '12rem' }}
+                    />
+                ))}
+            </DataTable>
             </div>
         );
     }
