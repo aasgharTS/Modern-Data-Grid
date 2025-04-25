@@ -29,12 +29,14 @@ interface DataGridState {
     previousParameters: { [key in keyof IInputs]?: any };
     enabled: boolean;
     needsRefresh: boolean;
+    isFilter?: boolean;
     currentPage: number;
     totalPages: number;
 }
 
 class DataGrid extends Component<DataGridProps, DataGridState> {
     private filterMap: Map<string, any> = new Map();
+    private rawRecords: any[] = [];        // <-- add here
     private intervalId: NodeJS.Timeout | null = null;
     static contextType = React.createContext<ComponentFramework.Context<IInputs> | undefined>(undefined);
     declare context: React.ContextType<typeof DataGrid.contextType>;
@@ -58,6 +60,8 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
             enabled: props.context.parameters.IsEnabled?.raw ?? true,
             needsRefresh: false,
             currentPage: 1,
+            isFilter: false,
+
         };
     }
 
@@ -140,51 +144,54 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
 
     parseConfigurations(configString: string): Record<string, any> {
         const configs: Record<string, any> = {};
-      
+
         try {
-          // Split by comma for each field
-          const fields = configString.split(",");
-          fields.forEach((field) => {
-            const [fieldName, config] = field.split("=");
-            if (fieldName && config) {
-              // Split configurations by "|" and ":" for key-value pairs
-              const configObject = config.split("|").reduce((acc, pair) => {
-                const [key, value] = pair.split(":");
-                if (key && value) acc[key.trim()] = value.trim();
-                return acc;
-              }, {} as Record<string, any>);
-              configs[fieldName.trim()] = configObject;
-            }
-          });
+            // Split by comma for each field
+            const fields = configString.split(",");
+            fields.forEach((field) => {
+                const [fieldName, config] = field.split("=");
+                if (fieldName && config) {
+                    // Split configurations by "|" and ":" for key-value pairs
+                    const configObject = config.split("|").reduce((acc, pair) => {
+                        const [key, value] = pair.split(":");
+                        if (key && value) acc[key.trim()] = value.trim();
+                        return acc;
+                    }, {} as Record<string, any>);
+                    configs[fieldName.trim()] = configObject;
+                }
+            });
         } catch (error) {
-          console.error("Error parsing FieldConfigurations:", error);
+            console.error("Error parsing FieldConfigurations:", error);
         }
-      
+
         return configs;
-      }
-      
-     
+    }
 
 
-      mapRecordsToState(force = false) {
+
+
+    mapRecordsToState(force = false) {
+        if (this.state.isFilter) {
+            return;
+        }
         const { context } = this.props;
         const dataSet = context.parameters.DataSource as ComponentFramework.PropertyTypes.DataSet;
-      console.log("map to state")
+        console.log("map to state")
         // Parse field configurations
         let fieldConfig: Record<string, any> = {};
         try {
-          const rawConfig = context.parameters.FieldConfigurations?.raw || "{}";
-          fieldConfig = this.parseConfigurations(rawConfig);
+            const rawConfig = context.parameters.FieldConfigurations?.raw || "{}";
+            fieldConfig = this.parseConfigurations(rawConfig);
         } catch (error) {
-          console.error("Invalid JSON in FieldConfigurations:", context.parameters.FieldConfigurations?.raw, error);
+            console.error("Invalid JSON in FieldConfigurations:", context.parameters.FieldConfigurations?.raw, error);
         }
 
         const typeHandlers: Record<string, (value: any, config: any, context: ComponentFramework.Context<IInputs>) => any> = {
             "Currency": (value, config) => this.formatCurrency(value, config?.currency || "USD"),
             "DateAndTime.DateAndTime": (value, config, context) =>
-              formatDate(new Date(value), config?.dateFormat || "yyyy-MM-dd HH:mm:ss", context),
+                formatDate(new Date(value), config?.dateFormat || "yyyy-MM-dd HH:mm:ss", context),
             "DateAndTime.DateOnly": (value, config, context) =>
-              formatDate(new Date(value), config?.dateFormat || "yyyy-MM-dd", context),
+                formatDate(new Date(value), config?.dateFormat || "yyyy-MM-dd", context),
             "Decimal": (value, config) => this.formatDecimal(value, parseInt(config?.decimalPlaces) || 2),
             "TwoOptions": (value, config) => (value ? config?.trueLabel || "Yes" : config?.falseLabel || "No"),
             "SingleLine.Email": (value) => `mailto:${value}`,
@@ -192,7 +199,7 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
             "SingleLine.URL": (value) => `<a href="${value}">${value}</a>`,
             "Object": (value) => JSON.stringify(value),
             // Add more as needed
-          };
+        };
 
         //const dateFormat = context.parameters.DateFormat?.raw || availablePatterns[0] || "yyyy-MM-dd";
         //const fieldConfigs = JSON.parse(context.parameters.FieldConfigurations?.raw || "{}");
@@ -237,14 +244,14 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
                     try {
                         // Use the typeHandlers map to process the column type
                         rec[col.name] = typeHandlers[colType]
-                          ? typeHandlers[colType](value, fieldConfig, context)
-                          : value; // Default case for unsupported data types
-                          console.log("Type handler",typeHandlers[colType])
-                      } catch (error) {
+                            ? typeHandlers[colType](value, fieldConfig, context)
+                            : value; // Default case for unsupported data types
+                        console.log("Type handler", typeHandlers[colType])
+                    } catch (error) {
                         console.error(`Error processing column "${col.name}" of type "${colType}":`, error);
                         rec[col.name] = value; // Fallback to raw value
-                      }
-                      return rec;
+                    }
+                    return rec;
                 }, {}),
             };
 
@@ -254,6 +261,7 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
 
         //console.log('Final mapped records:', records);
         //console.log('Columns:', dataSet.columns);
+        this.rawRecords = records;          // <= add this line
 
         this.setState(prevState => {
             const isRecordsChanged = !isEqual(prevState.records, records);
@@ -299,8 +307,8 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
 
         const filtersChanged = JSON.stringify(prevState.filters) !== JSON.stringify(this.state.filters);
         const prevFieldConfigurations = prevProps.context.parameters.FieldConfigurations?.raw || "";
-    const currentFieldConfigurations = this.props.context.parameters.FieldConfigurations?.raw || "";
-    
+        const currentFieldConfigurations = this.props.context.parameters.FieldConfigurations?.raw || "";
+
         const fieldConfigurationsChanged = prevFieldConfigurations !== currentFieldConfigurations;
 
 
@@ -425,11 +433,11 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
         if (!gridIsEnabled) {
             return;
         }
-    
+
         // Handle single or multiple selection
         const newSelectedRecords = Array.isArray(e.value) ? e.value : e.value ? [e.value] : [];
         const newSelectedRecordIds = newSelectedRecords.map((record: any) => record.id);
-    
+
         this.props.context.parameters.DataSource.setSelectedRecordIds(newSelectedRecordIds);
         this.setState({
             selectedRecordIds: newSelectedRecordIds,
@@ -491,7 +499,7 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
         return [];
     }
 
-   forceRefreshDataset = async () => {
+    forceRefreshDataset = async () => {
         const { context } = this.props;
         const dataSet = context.parameters.DataSource;
 
@@ -514,6 +522,77 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
         this.mapRecordsToState(true); // Force mapping even if loading
     };
 
+    forceRefreshDatasetFilter = async () => {
+        const { context } = this.props;
+        const dataSet = context.parameters.DataSource;
+
+        // Trigger dataset refresh
+        dataSet.refresh();
+        this.props.notifyOutputChanged();
+
+        // Wait for the dataset to finish loading
+        const waitForData = async (timeoutMs = 5000): Promise<void> => {
+            const start = Date.now();
+            while (dataSet.loading && Date.now() - start < timeoutMs) {
+                await new Promise(resolve => setTimeout(resolve, 100)); // Poll every 100ms
+            }
+            if (dataSet.loading) {
+                console.warn("Dataset loading timed out");
+            }
+        };
+
+        await waitForData();
+    };
+
+    onFilter = (e: DataTableStateEvent) => {
+        const newFilters = e.filters || {};
+
+        // Extract Title filter text safely
+        let titleFilterText = "";
+        const titleMeta = newFilters["Title"] as
+            | import("primereact/datatable").DataTableOperatorFilterMetaData
+            | import("primereact/datatable").DataTableFilterMetaData
+            | undefined;
+
+        if (titleMeta) {
+            if ("constraints" in titleMeta && titleMeta.constraints?.length) {
+                titleFilterText = titleMeta.constraints[0].value?.toString() ?? "";
+            } else if ("value" in titleMeta) {
+                titleFilterText = titleMeta.value?.toString() ?? "";
+            }
+        }
+
+        // Use rawRecords instead of fetching records again
+        const filteredRecords = titleFilterText.trim()
+            ? this.rawRecords.filter((rec) =>
+                (rec.Title ?? "")
+                    .toString()
+                    .toLowerCase()
+                    .includes(titleFilterText.toLowerCase())
+            )
+            : [...this.rawRecords]; // Use a copy to avoid mutating rawRecords
+
+        if (filteredRecords.length >= 1) {
+            this.setState(
+                {
+                    isFilter: true,
+                }
+            )
+        }
+        this.setState(
+            {
+                filters: newFilters,
+                records: filteredRecords,
+            },
+            () => {
+                // Only refresh dataset if necessary, avoid calling forceRefreshDatasetFilter
+                this.props.notifyOutputChanged();
+            }
+        );
+        console.log(this.state);
+    };
+
+
     render() {
         const { context } = this.props;
         const paging = context.parameters.DataSource.paging;
@@ -530,7 +609,7 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
         const allowMulti = context.parameters.AllowMultipleSelection?.raw ?? false;
         const allowFiltering = context.parameters.AllowFiltering?.raw ?? false;
         const rowsPerPageOptions = [5, 15, 25];
-    
+
         const onRenderItemColumn = (
             item?: Record<string, any>,
             index?: number,
@@ -545,16 +624,16 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
             }
             return null;
         };
-    
+
         type IColumn = {
             fieldName: string;
         };
-    
+
         return (
             <div className="card" style={{ display: "flex", width: "100%", height: "100%", overflow: "auto" }}>
                 <DataTable
                     lazy
-                    value={records}
+                    value={this.state.records}
                     paginator={displayPagination}
                     header={header}
                     rows={paging.pageSize}
@@ -569,15 +648,23 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
                             console.log("Paging is undefined");
                             return;
                         }
-    
+
+                        if (paging) {
+                            this.setState(
+                                {
+                                    isFilter: false,
+                                }
+                            )
+                        }
+
                         if (page === undefined) {
                             console.warn("Page is undefined in onPage event. Defaulting to page 1.");
                             return;
                         }
-    
+
                         const totalPages = Math.ceil(paging.totalResultCount / rows);
                         const targetPage = page + 1;
-    
+
                         if (rows !== paging.pageSize) {
                             console.log("Changing rows per page to:", rows);
                             paging.setPageSize(rows);
@@ -607,6 +694,7 @@ class DataGrid extends Component<DataGridProps, DataGridState> {
                     scrollable
                     scrollHeight="flex"
                     style={{ width: "100%", minWidth: "0" }}
+                    onFilter={this.onFilter}
                 >
                     <Column selectionMode={allowMulti ? "multiple" : "single"} headerStyle={{ width: "3rem" }}></Column>
                     {context.parameters.DataSource.columns.map((col, index) => (
